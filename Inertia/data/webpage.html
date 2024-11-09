@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Física I - ITBA</title>
+        <link rel="icon" type="image/png" href="logoFisics.png">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+                margin: 0;
+            }
+    
+            h1 {
+                margin-top: 20px;
+            }
+    
+            #chartContainer {
+                width: 80%;
+                margin: 0 auto;
+                flex-grow: 1;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+    
+            canvas {
+                max-width: 100%;
+                max-height: 100%;
+            }
+    
+            .buttons-container {
+                margin: 20px;
+            }
+    
+            button {
+                margin: 10px;
+                padding: 10px 20px;
+                font-size: 16px;
+                cursor: pointer;
+            }
+    
+        </style>
+    </head>
+    <body>
+        <h1>INERCIA</h1>
+        <h2>Rotación vs. Tiempo</h2>
+        
+        <div id="chartContainer">
+            <canvas id="myChart"></canvas>
+        </div>
+        
+        <!-- Buttons -->
+        <div class="buttons-container">
+            <button id="PLAY">PLAY</button>
+            <button id="RESET">RESET</button>
+            <button id="downloadGraph">Descargar PNG</button>
+            <button id="downloadCSV">Descargar CSV</button>
+        </div>
+    
+        <!-- Scripts -->
+        <script src="chart.js"></script>
+        <script src="html2canvas.min.js"></script>
+        <script src="script3.js"></script>
+    </body>
+</html>
