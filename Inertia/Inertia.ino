@@ -54,7 +54,7 @@ WebSocketsServer webSocket = WebSocketsServer(81);    // the websocket uses port
 // ---------------------------------------------------------------------------------------
 // Time Working
 const int timeSensing = 15; // In seconds
-const int interval = 10;   // In ms! Periodically get data from sensor and sends it to clients
+const int interval = 5;   // In ms! Periodically get data from sensor and sends it to clients
 const int webInterval = 500; // In ms! Interval to send data to webPage 
 
 // Global variables
