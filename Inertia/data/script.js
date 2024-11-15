@@ -1,6 +1,6 @@
 var Socket;
-const timeInterval = 0.01; // Time interval in seconds between data points
-const dataSize = 1501; // Time interval in seconds between data points
+const timeInterval = 0.005; // Time interval in seconds between data points
+const dataSize = 3001; // Time interval in seconds between data points
 
 function init() {
     Socket = new WebSocket('ws://' + window.location.hostname + ':81/');
@@ -13,6 +13,7 @@ function init() {
 var angles = [];
 var speeds = [];
 var accelerations = [];
+
 let ctx = document.getElementById('myChart').getContext('2d');
 let myChart = new Chart(ctx, {
     type: 'line',
@@ -147,21 +148,54 @@ function updateChart() {
 function calculateSpeedAndAcceleration() {
     speeds = [];
     accelerations = [];
-    
-    for (let i = 1; i < dataSize-1; i++) {
+
+    for (let i = 1; i < dataSize - 1; i++) {
         // Calculate speed (difference in angle over time)
-        let speed = (angles[i + 1] - angles[i - 1]) / (2*timeInterval); 
+        let speed = (angles[i + 1] - angles[i - 1]) / (2 * timeInterval);
         speeds.push(speed);
-        
+
         // Calculate acceleration (difference in speed over time)
         if (i > 1) {
             let acceleration = (speeds[i - 1] - speeds[i - 2]) / timeInterval;
             accelerations.push(acceleration);
         } else {
-            accelerations.push(0); // Acceleration is zero at the first data point
+            accelerations.push(0);
         }
     }
+
+    speeds = movingAverage(speeds, 20);
+    accelerations = movingAverage(accelerations, 20);
+
+    speeds = imputeOutliersWithNeighbors(speeds, 2);
+    accelerations = imputeOutliersWithNeighbors(accelerations, 1);
     updateChart();
+}
+
+function movingAverage(data, windowSize) {
+    let result = [];
+    for (let i = 0; i < data.length; i++) {
+        let start = Math.max(0, i - Math.floor(windowSize / 2));
+        let end = Math.min(data.length, i + Math.ceil(windowSize / 2));
+        let window = data.slice(start, end);
+        result.push(window.reduce((sum, val) => sum + val, 0) / window.length);
+    }
+    return result;
+}
+
+function imputeOutliersWithNeighbors(data, threshold) {
+    let mean = data.reduce((sum, val) => sum + val, 0) / data.length;
+    let stdDev = Math.sqrt(data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length);
+
+    return data.map((value, index) => {
+        if (Math.abs(value - mean) > threshold * stdDev) {
+            // Check if neighbors exist
+            let prev = index > 0 ? data[index - 1] : value; // previous value or current if first element
+            let next = index < data.length - 1 ? data[index + 1] : value; // next value or current if last element
+            let average = (prev + next) / 2;
+            return average; // Replace with the average of the previous and next value
+        }
+        return value; // Return original value if not an outlier
+    });
 }
 
 // Process the incoming data from the WebSocket
@@ -172,7 +206,7 @@ function processCommand(event) {
         // Obj.value contains an array of angles
         angles = obj.value;
 
-        // Recalculate speed and acceleration based on the angle data
+        // Calculate speed and acceleration based on the angle data
         calculateSpeedAndAcceleration();
     }
 }
