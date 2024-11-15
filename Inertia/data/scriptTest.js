@@ -1,18 +1,21 @@
 var Socket;
 const timeInterval = 0.01; // Time interval in seconds between data points
-const dataSize = 1501; // Time interval in seconds between data points
+const dataSize = 1501; // Total number of data points
 
-function init() {
-    Socket = new WebSocket('ws://' + window.location.hostname + ':81/');
-    Socket.onmessage = function(event) {
-        processCommand(event);
-    };
-}
+// Coefficients for the quadratic equation: θ(t) = a*t^2 + b*t + c
+const a = 1, b = 0.1, c = 0;
 
 // Initialize arrays for angle, speed, and acceleration
 var angles = [];
 var speeds = [];
 var accelerations = [];
+
+// Generate angle data as a quadratic function
+for (let i = 0; i < dataSize; i++) {
+    let t = i * timeInterval;
+    angles.push(a * t ** 2 + b * t + c);
+}
+
 let ctx = document.getElementById('myChart').getContext('2d');
 let myChart = new Chart(ctx, {
     type: 'line',
@@ -63,7 +66,7 @@ let myChart = new Chart(ctx, {
                     text: 'Tiempo (segundos)'
                 },
                 beginAtZero: true,
-                max: dataSize-1,
+                max: dataSize - 1,
                 ticks: {
                     stepSize: timeInterval
                 },
@@ -78,13 +81,12 @@ let myChart = new Chart(ctx, {
                     text: 'Angulo (rad)'
                 },
                 beginAtZero: true,
-                suggestedMin: 1,
                 ticks: {
-                    callback: function(value) {
+                    callback: function (value) {
                         return value.toFixed(1);
                     }
                 },
-                position: 'left' // Distance on the left Y-axis
+                position: 'left'
             },
             y1: {
                 title: {
@@ -92,15 +94,14 @@ let myChart = new Chart(ctx, {
                     text: 'Velocidad rotacional (rad/s)'
                 },
                 beginAtZero: true,
-                suggestedMin: 0,
                 ticks: {
-                    callback: function(value) {
+                    callback: function (value) {
                         return value.toFixed(1);
                     }
                 },
-                position: 'right', // Speed on the right Y-axis
+                position: 'right',
                 grid: {
-                    drawOnChartArea: false // Prevent grid lines from overlapping
+                    drawOnChartArea: false
                 }
             },
             y2: {
@@ -109,99 +110,47 @@ let myChart = new Chart(ctx, {
                     text: 'Aceleración (rad/s²)'
                 },
                 beginAtZero: true,
-                suggestedMin: 0,
                 ticks: {
-                    callback: function(value) {
+                    callback: function (value) {
                         return value.toFixed(1);
                     }
                 },
-                position: 'right', // Speed on the right Y-axis
+                position: 'right',
                 grid: {
-                    drawOnChartArea: false // Prevent grid lines from overlapping
+                    drawOnChartArea: false
                 }
             }
         }
     }
 });
 
-// Button Actions to plot different datasets
-document.getElementById('PLAY').addEventListener('click', () => {
-    var msg = { type: 'PLAY', value: 1 };
-    Socket.send(JSON.stringify(msg));
-});
-
-document.getElementById('RESET').addEventListener('click', () => {
-    var msg = { type: 'RESET', value: 0 };
-    Socket.send(JSON.stringify(msg));
-});
-
-// Function to update the chart with new data
-function updateChart() {
-    myChart.data.datasets[0].data = angles;
-    myChart.data.datasets[1].data = speeds;
-    myChart.data.datasets[2].data = accelerations;
-    myChart.update();
-}
-
 // Function to calculate speed and acceleration from angle data
 function calculateSpeedAndAcceleration() {
     speeds = [];
     accelerations = [];
-    
-    for (let i = 1; i < dataSize-1; i++) {
+
+    for (let i = 1; i < dataSize - 1; i++) {
         // Calculate speed (difference in angle over time)
-        let speed = (angles[i + 1] - angles[i - 1]) / (2*timeInterval); 
+        let speed = (angles[i + 1] - angles[i - 1]) / (2 * timeInterval);
         speeds.push(speed);
-        
+
         // Calculate acceleration (difference in speed over time)
         if (i > 1) {
             let acceleration = (speeds[i - 1] - speeds[i - 2]) / timeInterval;
             accelerations.push(acceleration);
         } else {
-            accelerations.push(0); // Acceleration is zero at the first data point
+            accelerations.push(0);
         }
     }
     updateChart();
 }
 
-// Process the incoming data from the WebSocket
-function processCommand(event) {
-    var obj = JSON.parse(event.data);
-    var type = obj.type;
-    if (type.localeCompare("graph_update") == 0) {
-        // Obj.value contains an array of angles
-        angles = obj.value;
-
-        // Recalculate speed and acceleration based on the angle data
-        calculateSpeedAndAcceleration();
-    }
+// Update chart with calculated data
+function updateChart() {
+    myChart.data.datasets[1].data = speeds;
+    myChart.data.datasets[2].data = accelerations;
+    myChart.update();
 }
 
-// Download chart as image (PNG)
-document.getElementById('downloadGraph').addEventListener('click', () => {
-    html2canvas(document.getElementById('myChart')).then(canvas => {
-        let link = document.createElement('a');
-        link.download = 'graph.png';
-        link.href = canvas.toDataURL();
-        link.click();
-    });
-});
-
-// Download data as CSV with headers
-document.getElementById('downloadCSV').addEventListener('click', function() {
-    const csvContent = "data:text/csv;charset=utf-8,Tiempo (segundos),Angulo (rads),Velocidad (rad/s),Aceleración (rad/s²)\n"
-        + angles.map((label, i) => `${label},${angles[i]},${speeds[i] || 0},${accelerations[i] || 0}`).join("\n");
-
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "data.csv");
-    document.body.appendChild(link); // Required for FF
-    link.click();
-    document.body.removeChild(link);
-});
-
-// Initialize the WebSocket and chart on page load
-window.onload = function(event) {
-    init();
-}
+// Initialize the calculations and update the chart
+calculateSpeedAndAcceleration();
