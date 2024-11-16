@@ -28,7 +28,8 @@
 // SENSOR
 #include <Wire.h>
 #define I2C_ADDR 0x70  // Address de comunicación serial I2C del sensor GY-US42V2
-// ---------------------------------------------------------------------------------------
+
+const int LED_PIN = 2;
 
 // ---------------------------------------------------------------------------------------
 // IF YOU WANT TO CONNECT TO LOCAL WIFI -> UNCOMMENT THE FOLLOWING DEFINE & write Wifi credentials
@@ -50,9 +51,9 @@ WebSocketsServer webSocket = WebSocketsServer(81);    // the websocket uses port
 
 // ---------------------------------------------------------------------------------------
 // Time Working
-const int timeSensing = 10; // In seconds
+const int timeSensing = 15; // In seconds
 const int interval = 100;   // In ms! Periodically get data from sensor and sends it to clients
-const int webInterval = 400; // In ms! Interval to send data to webPage 
+const int webInterval = 500; // In ms! Interval to send data to webPage 
 
 // Global variables
 const int ARRAY_LENGTH = ((1000/interval) * timeSensing) + 1;
@@ -63,41 +64,20 @@ bool meassure = false;
 void setup() {
   Serial.begin(115200); // Init serial port for debugging
 
+  if (!SPIFFS.begin()) {
+    Serial.println("SPIFFS could not initialize");
+    return;
+  }
+
   // SENSOR: Inicializo los pines para la comunicación I2C
   Wire.begin(21, 22);  // SDA (Serial Data) en GPIO21 | SCL (Serial Clock) en GPIO22
   //*****************
 
-  if (!SPIFFS.begin()) {
-    Serial.println("SPIFFS could not initialize");
-  }
-
   // setup LED channels
-  pinMode(2, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
 
-  Serial.println("Starting server");
-  #ifdef USE_INTRANET
-    Serial.print("Connecting to local network ...");
-    WiFi.begin(LOCAL_SSID, LOCAL_PASS);
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-    }
-    Serial.println(" Ready");
-    Serial.print("IP address: "); Serial.println(WiFi.localIP());
-  #endif
-
-  #ifndef USE_INTRANET
-    Serial.print("Setting up Access Point ... ");
-    Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ? "Ready" : "Failed!");
-
-    Serial.print("Starting Access Point ... ");
-    Serial.println(WiFi.softAP(AP_SSID, AP_PASS) ? "Ready" : "Failed!");
-
-    Serial.print("IP address = ");
-    Serial.println(WiFi.softAPIP());
-
-    WiFi.setTxPower(WIFI_POWER_8_5dBm); // To use lower power
-  #endif
+  // Starting server
+  setupWiFi();
 
   // START WEBPAGE
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {    // define here wat the webserver needs to do
@@ -142,7 +122,7 @@ void loop() {
     previousMillis = now; // reset previousMillis
     time = sampleN * interval;
     if (time >= (timeSensing*1000)) { //Change timeSensing to miliseconds
-      digitalWrite(2, LOW);
+      digitalWrite(LED_PIN, LOW);
       meassure = false;
     }
 
@@ -176,6 +156,34 @@ void loop() {
 }
 
 // ---------------------------------------------------------------------------------------
+void setupWiFi() {
+#ifdef USE_INTRANET
+    connectToWiFi();
+#else
+    setupAccessPoint();
+#endif
+}
+
+void connectToWiFi() {
+    Serial.print("Connecting to local network...");
+    WiFi.begin(LOCAL_SSID, LOCAL_PASS);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println(" Connected!");
+    Serial.print("IP address: "); Serial.println(WiFi.localIP());
+}
+
+void setupAccessPoint() {
+    Serial.print("Setting up Access Point ... ");
+    WiFi.softAPConfig(local_IP, gateway, subnet);
+    WiFi.softAP(AP_SSID, AP_PASS);
+    Serial.print("AP IP address: "); Serial.println(WiFi.softAPIP());
+    WiFi.setTxPower(WIFI_POWER_8_5dBm); // To use lower power
+}
+
+// ---------------------------------------------------------------------------------------
 // Callback for webSocket
 void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {      // the parameters of this callback function are always the same -> num: id of the client who send the event, type: type of message, payload: actual data sent and length: length of payload
   switch (type) {                                     // switch on the type of information sent
@@ -202,12 +210,12 @@ void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {
 
         // IF PLAY -> TURN ON LED
         if(String(l_type) == "PLAY") {
-          digitalWrite(2, HIGH);
+          digitalWrite(LED_PIN, HIGH);
           meassure = true;
         }
         // else if LED_select is changed -> switch on LED and switch off the rest
         if(String(l_type) == "RESET") {
-          digitalWrite(2, LOW);
+          digitalWrite(LED_PIN, LOW);
           meassure = false;
           for(int i=0; i < ARRAY_LENGTH; i++) {
             sens_vals[i] = 0;

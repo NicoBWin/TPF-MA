@@ -1,33 +1,71 @@
 var Socket;
+const timeInterval = 0.1; // Time interval in seconds between data points
+const dataSize = 151; // Time interval in seconds between data points
   
 function init() {
     Socket = new WebSocket('ws://' + window.location.hostname + ':81/');
+    Socket.onopen = function() {
+        console.log("WebSocket connection established.");
+    };
     Socket.onmessage = function(event) {
         processCommand(event);
     };
+    Socket.onclose = function() {
+        console.error("WebSocket connection closed. Reconnecting...");
+        setTimeout(init, 1000); // Retry connection after 1 second
+    };
+    Socket.onerror = function(error) {
+        console.error("WebSocket error:", error);
+    };
 }
 
-// Set up the initial chart with time (0-20 seconds) on the X-axis and distance (cm) on the Y-axis
-var yValues = [];
+// Initialize arrays for angle, speed, and acceleration
+var distances = [];
+var speeds = [];
+var accelerations = [];
+
 let ctx = document.getElementById('myChart').getContext('2d');
 let myChart = new Chart(ctx, {
     type: 'line',
     data: {
-        labels: Array.from({ length: 101 }, (_, i) => (i * 0.1).toFixed(2)),
-        datasets: [{
-            label: 'Distancia (cm)',
-            data: yValues,
-            backgroundColor: 'rgba(54, 162, 235, 0.2)',
-            borderColor: 'rgba(54, 162, 235, 1)',
-            borderWidth: 1,
-            fill: false,
-            pointRadius: 0
-        }]
+        labels: Array.from({length: dataSize-500}, (_, i) => (i * timeInterval).toFixed(3)),
+        datasets: [
+            {
+                label: 'Distancia (cm)',
+                data: distances,
+                backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+                fill: false,
+                pointRadius: 1,
+                yAxisID: 'y'
+            },
+            {
+                label: 'Velocidad (cm/s)',
+                data: speeds,
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y1'
+            },
+            {
+                label: 'Aceleración (cm/s²)',
+                data: accelerations,
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1,
+                fill: false,
+                pointRadius: 0,
+                yAxisID: 'y2'
+            }
+        ]
     },
     options: {
         animation: {
-            duration: 250, // Reduce the animation duration for faster updates
-            easing: 'linear' // Use a linear easing function for a smooth and quick transition
+            duration: 250, // Reduce animation for faster updates
+            easing: 'linear' // Linear easing for smooth updates
         },
         scales: {
             x: {
@@ -36,9 +74,9 @@ let myChart = new Chart(ctx, {
                     text: 'Tiempo (segundos)'
                 },
                 beginAtZero: true,
-                max: 100,
+                max: dataSize-1,
                 ticks: {
-                    stepSize: 0.1
+                    stepSize: timeInterval
                 },
                 grid: {
                     color: 'rgba(200, 200, 200, 0.5)',
@@ -51,7 +89,47 @@ let myChart = new Chart(ctx, {
                     text: 'Distancia (cm)'
                 },
                 beginAtZero: true,
-                suggestedMin: 1  // Ensures the Y-axis stays above 0
+                suggestedMin: 1,
+                ticks: {
+                    callback: function(value) {
+                        return value.toFixed(1);
+                    }
+                },
+                position: 'left' // Distance on the left Y-axis
+            },
+            y1: {
+                title: {
+                    display: true,
+                    text: 'Velocidad (cm/s)'
+                },
+                beginAtZero: true,
+                suggestedMin: 0,
+                ticks: {
+                    callback: function(value) {
+                        return value.toFixed(1);
+                    }
+                },
+                position: 'right', // Speed on the right Y-axis
+                grid: {
+                    drawOnChartArea: false // Prevent grid lines from overlapping
+                }
+            },
+            y2: {
+                title: {
+                    display: true,
+                    text: 'Aceleración (cm/s²)'
+                },
+                beginAtZero: true,
+                suggestedMin: 0,
+                ticks: {
+                    callback: function(value) {
+                        return value.toFixed(1);
+                    }
+                },
+                position: 'right', // Speed on the right Y-axis
+                grid: {
+                    drawOnChartArea: false // Prevent grid lines from overlapping
+                }
             }
         }
     }
@@ -59,32 +137,77 @@ let myChart = new Chart(ctx, {
 
 // Button Actions to plot different datasets
 document.getElementById('PLAY').addEventListener('click', () => {
-    var msg = { type: 'PLAY', value: 1};
-	Socket.send(JSON.stringify(msg));
+    var msg = { type: 'PLAY', value: 1 };
+    Socket.send(JSON.stringify(msg));
 });
 
 document.getElementById('RESET').addEventListener('click', () => {
-    var msg = { type: 'RESET', value: 0};
-	Socket.send(JSON.stringify(msg));
+    var msg = { type: 'RESET', value: 0 };
+    Socket.send(JSON.stringify(msg));
 });
 
-// Function to update the chart with new data
-function updateChart(data, label) {
-    myChart.data.datasets[0].data = data;
-    myChart.data.datasets[0].label = label;
-    myChart.update();
-}
-
-// Peocess the incoming data from the WebSocket
+// Process the incoming data from the WebSocket
 function processCommand(event) {
     var obj = JSON.parse(event.data);
     var type = obj.type;
     if (type.localeCompare("graph_update") == 0) {
-        console.log(obj.value);
-        myChart.data.datasets[0].data = obj.value;
-        myChart.update();
+        // Obj.value contains an array of distance
+        distances = obj.value;
+
+        //Filter Speed
+        distances = movingAverage(distances, 10);
+
+        // Calculate speed and acceleration based on the angle data
+        calculateSpeedAndAcceleration();
     }
 }
+
+// Function to calculate speed and acceleration from angle data
+function calculateSpeedAndAcceleration() {
+    speeds = [];
+    accelerations = [];
+    const halfTimeInterval = 1 / (2 * timeInterval);
+
+    for (let i = 1; i < dataSize - 1; i++) {
+        // Calculate speed (difference in angle over time)
+        let speed = (distances[i + 1] - distances[i - 1]) * halfTimeInterval;
+        speeds.push(speed);
+    }
+    speeds = zeroPhaseMovingAverage(speeds, 5);
+
+    for (let i = 1; i < dataSize - 1; i++) {
+        // Calculate acceleration (difference in speed over time)
+        let acceleration = (speeds[i + 1] - speeds[i - 1]) * halfTimeInterval;
+        accelerations.push(acceleration);
+    }
+    accelerations = zeroPhaseMovingAverage(accelerations, 5);
+    
+    updateChart();
+}
+
+function movingAverage(data, windowSize) {
+    const halfWindow = Math.floor(windowSize / 2);
+    return data.map((_, i) => {
+        const start = Math.max(0, i - halfWindow);
+        const end = Math.min(data.length, i + halfWindow + 1);
+        const window = data.slice(start, end);
+        return window.reduce((sum, val) => sum + val, 0) / window.length;
+    });
+}
+
+function zeroPhaseMovingAverage(data, windowSize) {
+    const forwardPass = movingAverage(data, windowSize);
+    return movingAverage([...forwardPass].reverse(), windowSize).reverse();
+}
+
+// Function to update the chart with new data
+function updateChart() {
+    myChart.data.datasets[0].data = distances;
+    myChart.data.datasets[1].data = speeds;
+    myChart.data.datasets[2].data = accelerations;
+    myChart.update();
+}
+
 
 // Download chart as image (PNG)
 document.getElementById('downloadGraph').addEventListener('click', () => {
@@ -98,8 +221,10 @@ document.getElementById('downloadGraph').addEventListener('click', () => {
 
 // Download data as CSV with headers
 document.getElementById('downloadCSV').addEventListener('click', function() {
-    const csvContent = "data:text/csv;charset=utf-8,Tiempo (segundos),Distancia (cm)\n" // Add header row
-        + myChart.data.labels.map((label, i) => `${label},${myChart.data.datasets[0].data[i]}`).join("\n");
+    const csvContent = "data:text/csv;charset=utf-8,Time (seconds),Distance (cm),Speed (cm/s),Aceleration (cm/s^2)\n"
+        + myChart.data.labels.map((label, i) => 
+            `${label},${myChart.data.datasets[0].data[i]},${myChart.data.datasets[1].data[i]},${myChart.data.datasets[2].data[i]}`)
+        .join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -110,7 +235,7 @@ document.getElementById('downloadCSV').addEventListener('click', function() {
     document.body.removeChild(link);
 });
 
-//--------------------------------------
+// Initialize the WebSocket and chart on page load
 window.onload = function(event) {
     init();
 }

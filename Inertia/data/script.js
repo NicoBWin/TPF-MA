@@ -221,7 +221,7 @@ document.getElementById('downloadGraph').addEventListener('click', () => {
 
 // Download data as CSV with headers
 document.getElementById('downloadCSV').addEventListener('click', function() {
-    const csvContent = "data:text/csv;charset=utf-8,Time (segundos),Angle (rads),Speed (rad/s),Aceleration (rad/s^2)\n"
+    const csvContent = "data:text/csv;charset=utf-8,Time (seconds),Angle (rads),Speed (rad/s),Aceleration (rad/s^2)\n"
         + myChart.data.labels.map((label, i) => 
             `${label},${myChart.data.datasets[0].data[i]},${myChart.data.datasets[1].data[i]},${myChart.data.datasets[2].data[i]}`)
         .join("\n");
