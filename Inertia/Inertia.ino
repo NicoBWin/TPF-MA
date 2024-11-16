@@ -14,7 +14,7 @@
 //
 // Tutorial: https://www.youtube.com/watch?v=VaNVrE7-AO8&ab_channel=MoThunderz
 //
-// Written by Nicolás Bustelo - 61431 (last update: 13.10.2024)
+// Written by Nicolás Bustelo - 61431 (last update: 16.11.2024)
 // ---------------------------------------------------------------------------------------
 
 #include <WiFi.h>                                     // needed to connect to WiFi
@@ -27,11 +27,11 @@
 // ---------------------------------------------------------------------------------------
 // SENSOR
 #include <Arduino.h>
-const int pinA = 34; // Fase A a GPIO34
-const int pinB = 35; // Fase B a GPIO35
+const int ENCODER_PIN_A = 34; // Fase A a GPIO34
+const int ENCODER_PIN_B = 35; // Fase B a GPIO35
 volatile int position = 0; // Posición incremental del encoder
 volatile bool lastA = LOW; // Última lectura de la fase A
-// ---------------------------------------------------------------------------------------
+const int LED_PIN = 2;
 
 // ---------------------------------------------------------------------------------------
 // IF YOU WANT TO CONNECT TO LOCAL WIFI -> UNCOMMENT THE FOLLOWING DEFINE & write Wifi credentials
@@ -48,8 +48,8 @@ IPAddress gateway(192,168,1,1);
 IPAddress subnet(255,255,255,0);
 
 // Initialization of webserver and websocket
-AsyncWebServer server(80);                            // the server uses port 80 (standard port for websites
-WebSocketsServer webSocket = WebSocketsServer(81);    // the websocket uses port 81 (standard port for websockets
+AsyncWebServer server(80);                            // the server uses port 80 (standard port for websites)
+WebSocketsServer webSocket = WebSocketsServer(81);    // the websocket uses port 81 (standard port for websockets)
 
 // ---------------------------------------------------------------------------------------
 // Time Working
@@ -64,44 +64,24 @@ bool meassure = false;
 
 // ---------------------------------------------------------------------------------------
 void setup() {
-  Serial.begin(115200); // Init serial port for debugging
-
-  // SENSOR: Inicializo los pines para leer el encoder
-  pinMode(pinA, INPUT); // Inicializo la fase A
-  pinMode(pinB, INPUT); // Inicializo la fase B
-  attachInterrupt(digitalPinToInterrupt(pinA), updateEncoder, CHANGE); // Inicializo interrupción para cuando se mueve el encoder (cambia la fase A) con su función de callback
-  //*****************
+  Serial.begin(115200);
 
   if (!SPIFFS.begin()) {
     Serial.println("SPIFFS could not initialize");
+    return;
   }
 
-  // setup LED channels
-  pinMode(2, OUTPUT);
+  // SENSOR: Inicializo los pines para leer el encoder
+  pinMode(ENCODER_PIN_A, INPUT); // Inicializo la fase A
+  pinMode(ENCODER_PIN_B, INPUT); // Inicializo la fase B
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), updateEncoder, CHANGE); // Inicializo interrupción para cuando se mueve el encoder (cambia la fase A) con su función de callback
+  //*****************
 
-  Serial.println("Starting server");
-  #ifdef USE_INTRANET
-    Serial.print("Connecting to local network ...");
-    WiFi.begin(LOCAL_SSID, LOCAL_PASS);
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(500);
-      Serial.print(".");
-    }
-    Serial.println(" Ready");
-    Serial.print("IP address: "); Serial.println(WiFi.localIP());
-  #endif
+  // Setup LED channels
+  pinMode(LED_PIN, OUTPUT);
 
-  #ifndef USE_INTRANET
-    Serial.print("Setting up Access Point ... ");
-    Serial.println(WiFi.softAPConfig(local_IP, gateway, subnet) ? "Ready" : "Failed!");
-
-    Serial.print("Starting Access Point ... ");
-    Serial.println(WiFi.softAP(AP_SSID, AP_PASS) ? "Ready" : "Failed!");
-
-    Serial.print("IP address = ");
-    Serial.println(WiFi.softAPIP());
-    WiFi.setTxPower(WIFI_POWER_8_5dBm); // To use lower power
-  #endif
+  // Starting server
+  setupWiFi();
 
   // START WEBPAGE
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {    // define here wat the webserver needs to do
@@ -144,7 +124,7 @@ void loop() {
     previousMillis = now; // reset previousMillis
     time = sampleN * interval;
     if (time >= (timeSensing*1000)) { //Change timeSensing to miliseconds
-      digitalWrite(2, LOW);
+      digitalWrite(LED_PIN, LOW);
       meassure = false;
     }
 
@@ -166,20 +146,43 @@ void loop() {
   }
 }
 
+// ---------------------------------------------------------------------------------------
+void setupWiFi() {
+#ifdef USE_INTRANET
+    connectToWiFi();
+#else
+    setupAccessPoint();
+#endif
+}
+
+void connectToWiFi() {
+    Serial.print("Connecting to local network...");
+    WiFi.begin(LOCAL_SSID, LOCAL_PASS);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println(" Connected!");
+    Serial.print("IP address: "); Serial.println(WiFi.localIP());
+}
+
+void setupAccessPoint() {
+    Serial.print("Setting up Access Point ... ");
+    WiFi.softAPConfig(local_IP, gateway, subnet);
+    WiFi.softAP(AP_SSID, AP_PASS);
+    Serial.print("AP IP address: "); Serial.println(WiFi.softAPIP());
+    WiFi.setTxPower(WIFI_POWER_8_5dBm); // To use lower power
+}
+
+// ---------------------------------------------------------------------------------------
 //Callback for encoder
 void updateEncoder() {
-    bool currentA = digitalRead(pinA); // Estado acutal de la fase A
-    bool currentB = digitalRead(pinB); // Estado actual de la fase B
-    
-    if (lastA == LOW && currentA == HIGH) { // Verifico si A cambia
-        // Si A cambia, analizo si la rotación es horaria o antihoraria con la fase B
-        if (currentB == LOW) {
-            position++; // Rotación horaria
-        } else {
-            position--; // Rotación antihoraria
-        }
+    bool currentA = digitalRead(ENCODER_PIN_A);
+    if (lastA != currentA) {  // Only process on change
+        bool currentB = digitalRead(ENCODER_PIN_B);
+        position += (currentA == currentB) ? 1 : -1; // Determine direction
+        lastA = currentA;
     }
-    lastA = currentA; // Actualizo el estado de la fase A
 }
 
 // ---------------------------------------------------------------------------------------
@@ -211,12 +214,12 @@ void webSocketEvent(byte num, WStype_t type, uint8_t * payload, size_t length) {
 
         // IF PLAY -> TURN ON LED
         if(String(l_type) == "PLAY") {
-          digitalWrite(2, HIGH);
+          digitalWrite(LED_PIN, HIGH);
           meassure = true;
         }
         // IF RESET -> TURN OFF LED
         if(String(l_type) == "RESET") {
-          digitalWrite(2, LOW);
+          digitalWrite(LED_PIN, LOW);
           meassure = false;
           for(int i=0; i < ARRAY_LENGTH; i++) {
             sens_vals[i] = 0;
