@@ -166,17 +166,18 @@ function processCommand(event) {
 function calculateSpeedAndAcceleration() {
     speeds = [];
     accelerations = [];
+    const halfTimeInterval = 1 / (2 * timeInterval);
 
     for (let i = 1; i < dataSize - 1; i++) {
         // Calculate speed (difference in angle over time)
-        let speed = (angles[i + 1] - angles[i - 1]) / (2 * timeInterval);
+        let speed = (angles[i + 1] - angles[i - 1]) * halfTimeInterval;
         speeds.push(speed);
     }
     speeds = zeroPhaseMovingAverage(speeds, 150);
 
     for (let i = 1; i < dataSize - 1; i++) {
         // Calculate acceleration (difference in speed over time)
-        let acceleration = (speeds[i + 1] - speeds[i - 1]) / (2 * timeInterval);
+        let acceleration = (speeds[i + 1] - speeds[i - 1]) * halfTimeInterval;
         accelerations.push(acceleration);
     }
     accelerations = zeroPhaseMovingAverage(accelerations, 150);
