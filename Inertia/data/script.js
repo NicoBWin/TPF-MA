@@ -4,8 +4,18 @@ const dataSize = 3001; // Time interval in seconds between data points
 
 function init() {
     Socket = new WebSocket('ws://' + window.location.hostname + ':81/');
+    Socket.onopen = function() {
+        console.log("WebSocket connection established.");
+    };
     Socket.onmessage = function(event) {
         processCommand(event);
+    };
+    Socket.onclose = function() {
+        console.error("WebSocket connection closed. Reconnecting...");
+        setTimeout(init, 1000); // Retry connection after 1 second
+    };
+    Socket.onerror = function(error) {
+        console.error("WebSocket error:", error);
     };
 }
 
@@ -136,60 +146,6 @@ document.getElementById('RESET').addEventListener('click', () => {
     Socket.send(JSON.stringify(msg));
 });
 
-// Function to update the chart with new data
-function updateChart() {
-    myChart.data.datasets[0].data = angles;
-    myChart.data.datasets[1].data = speeds;
-    myChart.data.datasets[2].data = accelerations;
-    myChart.update();
-}
-
-// Function to calculate speed and acceleration from angle data
-function calculateSpeedAndAcceleration() {
-    speeds = [];
-    accelerations = [];
-    //Filter Speed
-    angles = movingAverage(angles, 250);
-
-
-    for (let i = 1; i < dataSize - 1; i++) {
-        // Calculate speed (difference in angle over time)
-        let speed = (angles[i + 1] - angles[i - 1]) / (2 * timeInterval);
-        speeds.push(speed);
-    }
-    // Filter Speed
-    speeds = zeroPhaseMovingAverage(speeds, 150);
-
-    for (let i = 1; i < dataSize - 1; i++) {
-        // Calculate acceleration (difference in speed over time)
-        let acceleration = (speeds[i + 1] - speeds[i - 1]) / (2 * timeInterval);
-        accelerations.push(acceleration);
-    }
-    accelerations = zeroPhaseMovingAverage(accelerations, 150);
-    updateChart();
-}
-
-function zeroPhaseMovingAverage(data, windowSize) {
-    // Forward pass: apply the moving average filter
-    let forwardPass = movingAverage(data, windowSize);
-    
-    // Backward pass: reverse the array, apply the filter, and reverse again
-    let backwardPass = movingAverage(forwardPass.reverse(), windowSize).reverse();
-    
-    return backwardPass;
-}
-
-function movingAverage(data, windowSize) {
-    let result = [];
-    for (let i = 0; i < data.length; i++) {
-        let start = Math.max(0, i - Math.floor(windowSize / 2));
-        let end = Math.min(data.length, i + Math.ceil(windowSize / 2));
-        let window = data.slice(start, end);
-        result.push(window.reduce((sum, val) => sum + val, 0) / window.length);
-    }
-    return result;
-}
-
 // Process the incoming data from the WebSocket
 function processCommand(event) {
     var obj = JSON.parse(event.data);
@@ -198,10 +154,59 @@ function processCommand(event) {
         // Obj.value contains an array of angles
         angles = obj.value;
 
+        //Filter Speed
+        angles = movingAverage(angles, 250);
+
         // Calculate speed and acceleration based on the angle data
         calculateSpeedAndAcceleration();
     }
 }
+
+// Function to calculate speed and acceleration from angle data
+function calculateSpeedAndAcceleration() {
+    speeds = [];
+    accelerations = [];
+
+    for (let i = 1; i < dataSize - 1; i++) {
+        // Calculate speed (difference in angle over time)
+        let speed = (angles[i + 1] - angles[i - 1]) / (2 * timeInterval);
+        speeds.push(speed);
+    }
+    speeds = zeroPhaseMovingAverage(speeds, 150);
+
+    for (let i = 1; i < dataSize - 1; i++) {
+        // Calculate acceleration (difference in speed over time)
+        let acceleration = (speeds[i + 1] - speeds[i - 1]) / (2 * timeInterval);
+        accelerations.push(acceleration);
+    }
+    accelerations = zeroPhaseMovingAverage(accelerations, 150);
+    
+    updateChart();
+}
+
+function movingAverage(data, windowSize) {
+    const halfWindow = Math.floor(windowSize / 2);
+    return data.map((_, i) => {
+        const start = Math.max(0, i - halfWindow);
+        const end = Math.min(data.length, i + halfWindow + 1);
+        const window = data.slice(start, end);
+        return window.reduce((sum, val) => sum + val, 0) / window.length;
+    });
+}
+
+function zeroPhaseMovingAverage(data, windowSize) {
+    const forwardPass = movingAverage(data, windowSize);
+    return movingAverage([...forwardPass].reverse(), windowSize).reverse();
+}
+
+// Function to update the chart with new data
+function updateChart() {
+    myChart.data.datasets[0].data = angles;
+    myChart.data.datasets[1].data = speeds;
+    myChart.data.datasets[2].data = accelerations;
+    myChart.update();
+}
+
 
 // Download chart as image (PNG)
 document.getElementById('downloadGraph').addEventListener('click', () => {
