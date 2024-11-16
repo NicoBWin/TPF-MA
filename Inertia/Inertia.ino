@@ -35,7 +35,7 @@ volatile bool lastA = LOW; // Última lectura de la fase A
 
 // ---------------------------------------------------------------------------------------
 // IF YOU WANT TO CONNECT TO LOCAL WIFI -> UNCOMMENT THE FOLLOWING DEFINE & write Wifi credentials
-//#define USE_INTRANET
+// #define USE_INTRANET
 #define LOCAL_SSID "LOCAL_NAME"
 #define LOCAL_PASS "LOCAL_PASS"
 
@@ -55,7 +55,7 @@ WebSocketsServer webSocket = WebSocketsServer(81);    // the websocket uses port
 // Time Working
 const int timeSensing = 15; // In seconds
 const int interval = 5;   // In ms! Periodically get data from sensor and sends it to clients
-const int webInterval = 7500; // In ms! Interval to send data to webPage 
+const int webInterval = 1000; // In ms! Interval to send data to webPage 
 
 // Global variables
 const int ARRAY_LENGTH = ((1000/interval) * timeSensing) + 1;

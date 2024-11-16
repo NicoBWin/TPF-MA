@@ -18,7 +18,7 @@ let ctx = document.getElementById('myChart').getContext('2d');
 let myChart = new Chart(ctx, {
     type: 'line',
     data: {
-        labels: Array.from({ length: dataSize }, (_, i) => (i * timeInterval).toFixed(2)),
+        labels: Array.from({length: dataSize-500}, (_, i) => (i * timeInterval).toFixed(3)),
         datasets: [
             {
                 label: 'Angulo (rad)',
@@ -148,27 +148,35 @@ function updateChart() {
 function calculateSpeedAndAcceleration() {
     speeds = [];
     accelerations = [];
+    //Filter Speed
+    angles = movingAverage(angles, 250);
+
 
     for (let i = 1; i < dataSize - 1; i++) {
         // Calculate speed (difference in angle over time)
         let speed = (angles[i + 1] - angles[i - 1]) / (2 * timeInterval);
         speeds.push(speed);
-
-        // Calculate acceleration (difference in speed over time)
-        if (i > 1) {
-            let acceleration = (speeds[i - 1] - speeds[i - 2]) / timeInterval;
-            accelerations.push(acceleration);
-        } else {
-            accelerations.push(0);
-        }
     }
+    // Filter Speed
+    speeds = zeroPhaseMovingAverage(speeds, 150);
 
-    speeds = movingAverage(speeds, 20);
-    accelerations = movingAverage(accelerations, 20);
-
-    speeds = imputeOutliersWithNeighbors(speeds, 2);
-    accelerations = imputeOutliersWithNeighbors(accelerations, 1);
+    for (let i = 1; i < dataSize - 1; i++) {
+        // Calculate acceleration (difference in speed over time)
+        let acceleration = (speeds[i + 1] - speeds[i - 1]) / (2 * timeInterval);
+        accelerations.push(acceleration);
+    }
+    accelerations = zeroPhaseMovingAverage(accelerations, 150);
     updateChart();
+}
+
+function zeroPhaseMovingAverage(data, windowSize) {
+    // Forward pass: apply the moving average filter
+    let forwardPass = movingAverage(data, windowSize);
+    
+    // Backward pass: reverse the array, apply the filter, and reverse again
+    let backwardPass = movingAverage(forwardPass.reverse(), windowSize).reverse();
+    
+    return backwardPass;
 }
 
 function movingAverage(data, windowSize) {
@@ -180,22 +188,6 @@ function movingAverage(data, windowSize) {
         result.push(window.reduce((sum, val) => sum + val, 0) / window.length);
     }
     return result;
-}
-
-function imputeOutliersWithNeighbors(data, threshold) {
-    let mean = data.reduce((sum, val) => sum + val, 0) / data.length;
-    let stdDev = Math.sqrt(data.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / data.length);
-
-    return data.map((value, index) => {
-        if (Math.abs(value - mean) > threshold * stdDev) {
-            // Check if neighbors exist
-            let prev = index > 0 ? data[index - 1] : value; // previous value or current if first element
-            let next = index < data.length - 1 ? data[index + 1] : value; // next value or current if last element
-            let average = (prev + next) / 2;
-            return average; // Replace with the average of the previous and next value
-        }
-        return value; // Return original value if not an outlier
-    });
 }
 
 // Process the incoming data from the WebSocket
@@ -223,8 +215,10 @@ document.getElementById('downloadGraph').addEventListener('click', () => {
 
 // Download data as CSV with headers
 document.getElementById('downloadCSV').addEventListener('click', function() {
-    const csvContent = "data:text/csv;charset=utf-8,Tiempo (segundos),Angulo (rads),Velocidad (rad/s),Aceleración (rad/s²)\n"
-        + angles.map((label, i) => `${label},${angles[i]},${speeds[i] || 0},${accelerations[i] || 0}`).join("\n");
+    const csvContent = "data:text/csv;charset=utf-8,Time (segundos),Angle (rads),Speed (rad/s),Aceleration (rad/s^2)\n"
+        + myChart.data.labels.map((label, i) => 
+            `${label},${myChart.data.datasets[0].data[i]},${myChart.data.datasets[1].data[i]},${myChart.data.datasets[2].data[i]}`)
+        .join("\n");
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
