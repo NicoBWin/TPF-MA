@@ -1,6 +1,6 @@
 var Socket;
 const timeInterval = 0.1; // Time interval in seconds between data points
-const dataSize = 151; // Time interval in seconds between data points
+const dataSize = 101; // Time interval in seconds between data points
   
 function init() {
     Socket = new WebSocket('ws://' + window.location.hostname + ':81/');
@@ -28,7 +28,7 @@ let ctx = document.getElementById('myChart').getContext('2d');
 let myChart = new Chart(ctx, {
     type: 'line',
     data: {
-        labels: Array.from({length: dataSize-500}, (_, i) => (i * timeInterval).toFixed(3)),
+        labels: Array.from({length: dataSize}, (_, i) => (i * timeInterval).toFixed(3)),
         datasets: [
             {
                 label: 'Distancia (cm)',
@@ -155,7 +155,7 @@ function processCommand(event) {
         distances = obj.value;
 
         //Filter Speed
-        distances = movingAverage(distances, 10);
+        distances = movingAverage(distances, 5);
 
         // Calculate speed and acceleration based on the angle data
         calculateSpeedAndAcceleration();

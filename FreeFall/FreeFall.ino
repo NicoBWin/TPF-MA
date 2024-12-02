@@ -51,7 +51,7 @@ WebSocketsServer webSocket = WebSocketsServer(81);    // the websocket uses port
 
 // ---------------------------------------------------------------------------------------
 // Time Working
-const int timeSensing = 15; // In seconds
+const int timeSensing = 10; // In seconds
 const int interval = 100;   // In ms! Periodically get data from sensor and sends it to clients
 const int webInterval = 500; // In ms! Interval to send data to webPage 
 
@@ -180,7 +180,7 @@ void setupAccessPoint() {
     WiFi.softAPConfig(local_IP, gateway, subnet);
     WiFi.softAP(AP_SSID, AP_PASS);
     Serial.print("AP IP address: "); Serial.println(WiFi.softAPIP());
-    WiFi.setTxPower(WIFI_POWER_8_5dBm); // To use lower power
+    //WiFi.setTxPower(WIFI_POWER_8_5dBm); // To use lower power
 }
 
 // ---------------------------------------------------------------------------------------
